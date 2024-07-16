@@ -191,22 +191,21 @@ func (c *ProxyClient) claimHot(headers Headers) error {
 	return nil
 }
 
-func multiClaim(accounts []Headers) error {
+func multiClaim(accounts []Headers) {
 	log.Printf("Claiming on %d accounts", len(accounts))
 	for _, acc := range accounts {
 		cl, err := newProxyClient(acc.Proxy)
 		if err != nil {
-			return err
+			log.Println(err)
 		}
 
 		err = cl.claimHot(acc)
 		if err != nil {
-			return err
+			log.Println(err)
 		}
 		sleep := time.Second * 20
 		time.Sleep(time.Duration(rand.Intn(int(sleep))))
 	}
-	return nil
 }
 
 func main() {
@@ -223,18 +222,12 @@ func main() {
 	ticker := time.NewTicker(125 * time.Minute)
 
 	go func() {
-		err = multiClaim(cfg.Accounts)
-		if err != nil {
-			log.Println(err)
-		}
+		multiClaim(cfg.Accounts)
 
 		for {
 			select {
 			case <-ticker.C:
-				err = multiClaim(cfg.Accounts)
-				if err != nil {
-					log.Println(err)
-				}
+				multiClaim(cfg.Accounts)
 			case <-sigs:
 				ticker.Stop()
 				return
