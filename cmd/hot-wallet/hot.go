@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/andybalholm/brotli"
@@ -18,8 +19,21 @@ import (
 	"time"
 )
 
+const rpcURL = "https://rpc.mainnet.near.org"
+
+type RPCResponse struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Result  struct {
+		Result      []byte   `json:"result"`
+		Logs        []string `json:"logs"`
+		BlockHeight int64    `json:"block_height"`
+		BlockHash   string   `json:"block_hash"`
+	} `json:"result"`
+	ID int `json:"id"`
+}
+
 type Payload struct {
-	GameState GameState `json:"game_state"`
+	GameState *GameState `json:"game_state"`
 }
 
 type GameState struct {
@@ -44,6 +58,7 @@ type Headers struct {
 	TelegramData  string `json:"telegram_data"`
 	UserAgent     string `json:"user_agent"`
 	Proxy         string `json:"proxy"`
+	Username      string `json:"username"`
 }
 
 type Config struct {
@@ -86,26 +101,63 @@ func newProxyClient(proxyUrl string) (*ProxyClient, error) {
 	}, nil
 }
 
-func (c *ProxyClient) claimHot(headers Headers) error {
-	url := "https://api0.herewallet.app/api/v1/user/hot/claim"
+func GetGameState(id string) (*GameState, error) {
+	argsBase64 := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"account_id": "%s"}`, id)))
+	payload := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      145,
+		"method":  "query",
+		"params": map[string]interface{}{
+			"request_type": "call_function",
+			"finality":     "optimistic",
+			"account_id":   "game.hot.tg",
+			"method_name":  "get_user",
+			"args_base64":  argsBase64,
+		},
+	}
+	log.Println(payload)
 
-	gameState := GameState{
-		Refferals: 0,
-		Inviter:   "kirill_ryb.tg",
-		Village:   nil, // Use &village if you want to set a value
-		LastClaim: 1719763466094555000,
-		Firespace: 0,
-		Boost:     10,
-		Storage:   20,
-		Balance:   10000,
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
-	// Create and populate the Payload struct
+	resp, err := http.Post(rpcURL, "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP request failed with status: %s", resp.Status)
+	}
+
+	var rpcResponse RPCResponse
+	err = json.NewDecoder(resp.Body).Decode(&rpcResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	var gameState GameState
+	if err := json.Unmarshal(rpcResponse.Result.Result, &gameState); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal result: %v", err)
+	}
+
+	return &gameState, nil
+}
+
+func (c *ProxyClient) claimHot(headers Headers) error {
+	endpoint := "https://api0.herewallet.app/api/v1/user/hot/claim"
+
+	gameState, err := GetGameState("us3r0unknown.tg")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	payload := Payload{
 		GameState: gameState,
 	}
 
-	// Marshal the struct into a JSON string
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		fmt.Println("Error marshaling JSON:", err)
@@ -114,8 +166,7 @@ func (c *ProxyClient) claimHot(headers Headers) error {
 
 	body := bytes.NewReader(jsonData)
 
-	// Create a new request
-	req, err := http.NewRequest("POST", url, body)
+	req, err := http.NewRequest("POST", endpoint, body)
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return err
@@ -209,7 +260,6 @@ func multiClaim(accounts []Headers) {
 }
 
 func main() {
-
 	cfg, err := LoadConfig("config.json")
 	if err != nil {
 		log.Fatal(err)
