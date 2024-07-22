@@ -29,7 +29,7 @@ type RPCResponse struct {
 		BlockHeight int64    `json:"block_height"`
 		BlockHash   string   `json:"block_hash"`
 	} `json:"result"`
-	ID int `json:"id"`
+	ID string `json:"id"`
 }
 
 type Payload struct {
@@ -105,7 +105,7 @@ func GetGameState(id string) (*GameState, error) {
 	argsBase64 := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"account_id": "%s"}`, id)))
 	payload := map[string]interface{}{
 		"jsonrpc": "2.0",
-		"id":      145,
+		"id":      "dontcare",
 		"method":  "query",
 		"params": map[string]interface{}{
 			"request_type": "call_function",
