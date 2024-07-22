@@ -115,7 +115,6 @@ func GetGameState(id string) (*GameState, error) {
 			"args_base64":  argsBase64,
 		},
 	}
-	log.Println(payload)
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -151,7 +150,7 @@ func (c *ProxyClient) claimHot(headers Headers) error {
 
 	gameState, err := GetGameState("us3r0unknown.tg")
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("error getting game state: %v", err)
 	}
 
 	payload := Payload{
@@ -160,16 +159,14 @@ func (c *ProxyClient) claimHot(headers Headers) error {
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		fmt.Println("Error marshaling JSON:", err)
-		return err
+		return fmt.Errorf("error marshaling JSON: %v", err)
 	}
 
 	body := bytes.NewReader(jsonData)
 
 	req, err := http.NewRequest("POST", endpoint, body)
 	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return err
+		return fmt.Errorf("error creating request: %v", err)
 	}
 
 	// Set headers
