@@ -3,14 +3,14 @@ Go application to automatically claim hot tokens with/without proxy
 ## Usage
 You need to install docker and create config.json file
 
-`
+```sh
 git clone https://github.com/miklisanton/hot-claim.git
 cd hot-claim
 touch config.json
 docker run -d $(docker build -q .)
-`
+```
 ### config.json format
-First, you need to claim manually and capture headers sent by claim or status methods using f12->network
+First, you need to claim manually and capture headers sent by claim or status methods using f12->network.
 To avoid using proxy, set "proxy" to ""
 
 ```json
