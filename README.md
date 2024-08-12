@@ -24,6 +24,11 @@ To avoid using proxy, set "proxy" to ""
       "proxy": "http://login:password@host:port",
       "username": "username.tg"
     }
-  ]
+  ],
+  "mobile_proxy" :
+  {
+    "authorization": "your_auth_token",
+    "proxy_key": "your_proxy_key"
+  }
 }
 ```
