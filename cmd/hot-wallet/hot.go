@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -47,6 +48,17 @@ type GameState struct {
 	Balance   int     `json:"balance"`
 }
 
+type ProxyChangeResponse struct {
+	ProxyID int `json:"proxy_id"`
+}
+
+type ProxyDetailsResponse struct {
+	Pass  string `json:"proxy_pass"`
+	Login string `json:"proxy_login"`
+	IP    string `json:"proxy_host_ip"`
+	Port  string `json:"proxy_http_port"`
+}
+
 type ProxyClient struct {
 	client   *http.Client
 	proxyUrl *url.URL
@@ -61,8 +73,14 @@ type Headers struct {
 	Username      string `json:"username"`
 }
 
+type MobileData struct {
+	Authorization string `json:"authorization"`
+	ProxyKey      string `json:"proxy_key"`
+}
+
 type Config struct {
-	Accounts []Headers
+	Accounts    []Headers  `json:"accounts"`
+	MobileProxy MobileData `json:"mobile_proxy"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -141,6 +159,7 @@ func GetGameState(id string) (*GameState, error) {
 	if err := json.Unmarshal(rpcResponse.Result.Result, &gameState); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal result: %v", err)
 	}
+	log.Printf("hot balance: %v", gameState.Balance)
 
 	return &gameState, nil
 }
@@ -239,9 +258,18 @@ func (c *ProxyClient) claimHot(headers Headers) error {
 	return nil
 }
 
-func multiClaim(accounts []Headers) {
-	log.Printf("Claiming on %d accounts", len(accounts))
-	for _, acc := range accounts {
+func multiClaim(cfg Config) {
+	log.Printf("Claiming on %d accounts", len(cfg.Accounts))
+	for _, acc := range cfg.Accounts {
+		if acc.Proxy == "" {
+			// Use mobile proxy if normal proxy not specified
+			proxy, err := getMobileProxy(cfg.MobileProxy.Authorization, cfg.MobileProxy.ProxyKey)
+			if err != nil {
+				log.Printf("Error getting mobile proxy: %v\n", err)
+			}
+			acc.Proxy = proxy
+		}
+
 		cl, err := newProxyClient(acc.Proxy)
 		if err != nil {
 			log.Println(err)
@@ -254,6 +282,60 @@ func multiClaim(accounts []Headers) {
 		sleep := time.Second * 20
 		time.Sleep(time.Duration(rand.Intn(int(sleep))))
 	}
+}
+
+func getMobileProxy(authorization, proxyKey string) (string, error) {
+	endpoint := fmt.Sprintf("https://changeip.mobileproxy.space/?proxy_key=%s&format=json", proxyKey)
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP request failed with status: %s", resp.Status)
+	}
+
+	var response ProxyChangeResponse
+	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	return getProxyDetail(authorization, strconv.Itoa(response.ProxyID))
+}
+
+func getProxyDetail(authorization, proxyID string) (string, error) {
+	endpoint := fmt.Sprintf("https://mobileproxy.space/api.html?command=get_my_proxy&proxy_id=%s", proxyID)
+
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+authorization)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP request failed with status: %s", resp.Status)
+	}
+
+	var response []ProxyDetailsResponse
+
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse response: %v", err)
+	}
+	data := response[0]
+
+	return fmt.Sprintf("http://%s:%s@%s:%s", data.Login, data.Pass, data.IP, data.Port), nil
 }
 
 func main() {
@@ -269,12 +351,12 @@ func main() {
 	ticker := time.NewTicker(125 * time.Minute)
 
 	go func() {
-		multiClaim(cfg.Accounts)
+		multiClaim(*cfg)
 
 		for {
 			select {
 			case <-ticker.C:
-				multiClaim(cfg.Accounts)
+				multiClaim(*cfg)
 			case <-sigs:
 				ticker.Stop()
 				return
