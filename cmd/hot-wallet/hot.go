@@ -167,7 +167,7 @@ func GetGameState(id string) (*GameState, error) {
 func (c *ProxyClient) claimHot(headers Headers) error {
 	endpoint := "https://api0.herewallet.app/api/v1/user/hot/claim"
 
-	gameState, err := GetGameState("us3r0unknown.tg")
+	gameState, err := GetGameState(headers.Username)
 	if err != nil {
 		return fmt.Errorf("error getting game state: %v", err)
 	}
