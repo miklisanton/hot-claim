@@ -27,6 +27,7 @@ To avoid using proxy, set "proxy" to ""
   ],
   "mobile_proxy" :
   {
+    "proxy": "proxy_for_sending_requests_to_mobile_proxy_web",
     "authorization": "your_auth_token",
     "proxy_key": "your_proxy_key"
   }

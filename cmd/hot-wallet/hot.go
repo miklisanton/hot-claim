@@ -74,6 +74,7 @@ type Headers struct {
 }
 
 type MobileData struct {
+	Proxy         string `json:"proxy"`
 	Authorization string `json:"authorization"`
 	ProxyKey      string `json:"proxy_key"`
 }
@@ -263,7 +264,7 @@ func multiClaim(cfg Config) {
 	for _, acc := range cfg.Accounts {
 		if acc.Proxy == "" {
 			// Use mobile proxy if normal proxy not specified
-			proxy, err := getMobileProxy(cfg.MobileProxy.Authorization, cfg.MobileProxy.ProxyKey)
+			proxy, err := getMobileProxy(cfg.MobileProxy.Authorization, cfg.MobileProxy.ProxyKey, cfg.MobileProxy.Proxy)
 			if err != nil {
 				log.Printf("Error getting mobile proxy: %v\n", err)
 			}
@@ -284,9 +285,14 @@ func multiClaim(cfg Config) {
 	}
 }
 
-func getMobileProxy(authorization, proxyKey string) (string, error) {
+func getMobileProxy(authorization, proxyKey, proxy string) (string, error) {
 	endpoint := fmt.Sprintf("https://changeip.mobileproxy.space/?proxy_key=%s&format=json", proxyKey)
-	resp, err := http.Get(endpoint)
+	client, err := newProxyClient(proxy)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := client.client.Get(endpoint)
 	if err != nil {
 		return "", fmt.Errorf("error making request: %v", err)
 	}
@@ -301,11 +307,15 @@ func getMobileProxy(authorization, proxyKey string) (string, error) {
 		return "", fmt.Errorf("failed to parse response: %v", err)
 	}
 
-	return getProxyDetail(authorization, strconv.Itoa(response.ProxyID))
+	return getProxyDetail(authorization, strconv.Itoa(response.ProxyID), proxy)
 }
 
-func getProxyDetail(authorization, proxyID string) (string, error) {
+func getProxyDetail(authorization, proxyID, proxy string) (string, error) {
 	endpoint := fmt.Sprintf("https://mobileproxy.space/api.html?command=get_my_proxy&proxy_id=%s", proxyID)
+	client, err := newProxyClient(proxy)
+	if err != nil {
+		return "", err
+	}
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
@@ -313,7 +323,7 @@ func getProxyDetail(authorization, proxyID string) (string, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+authorization)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("error making request: %v", err)
 	}
