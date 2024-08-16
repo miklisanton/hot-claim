@@ -343,6 +343,10 @@ func getProxyDetail(authorization, proxyID, proxy string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse response: %v", err)
 	}
+	if len(response) != 1 {
+		log.Println(response)
+		return "", fmt.Errorf("wrong mobile proxy response")
+	}
 	data := response[0]
 
 	return fmt.Sprintf("http://%s:%s@%s:%s", data.Login, data.Pass, data.IP, data.Port), nil
