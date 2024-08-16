@@ -6,6 +6,7 @@ import (
 	"compress/zlib"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/andybalholm/brotli"
 	"io"
@@ -19,6 +20,13 @@ import (
 	"syscall"
 	"time"
 )
+
+var useMobileProxy *bool
+
+func init() {
+	useMobileProxy = flag.Bool("mobile", false, "use mobile proxy")
+	flag.Parse()
+}
 
 const rpcURL = "https://rpc.mainnet.near.org"
 
@@ -262,7 +270,7 @@ func (c *ProxyClient) claimHot(headers Headers) error {
 func multiClaim(cfg Config) {
 	log.Printf("Claiming on %d accounts", len(cfg.Accounts))
 	for _, acc := range cfg.Accounts {
-		if acc.Proxy == "" {
+		if *useMobileProxy && acc.Proxy == "" {
 			// Use mobile proxy if normal proxy not specified
 			proxy, err := getMobileProxy(cfg.MobileProxy.Authorization, cfg.MobileProxy.ProxyKey, cfg.MobileProxy.Proxy)
 			if err != nil {
